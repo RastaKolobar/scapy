@@ -9,19 +9,18 @@
 + Linux only test
 
 = L3RawSocket
-~ netaccess IP ICMP linux needs_root
+~ netaccess IP TCP linux needs_root
 
 old_l3socket = conf.L3socket
 old_debug_dissector = conf.debug_dissector
 conf.debug_dissector = False
 conf.L3socket = L3RawSocket
-x = sr1(IP(dst="www.google.com")/ICMP(),timeout=3)
+x = sr1(IP(dst="www.google.com")/TCP(sport=RandShort(), dport=80, flags="S"),timeout=3)
 conf.debug_dissector = old_debug_dissector
 conf.L3socket = old_l3socket
 x
 assert x[IP].ottl() in [32, 64, 128, 255]
 assert 0 <= x[IP].hops() <= 126
-x is not None and ICMP in x and x[ICMP].type == 0
 
 # TODO: fix this test (randomly stuck)
 # ex: https://travis-ci.org/secdev/scapy/jobs/247473497
@@ -150,6 +149,8 @@ else:
 = veth interface error handling
 ~ linux needs_root veth
 
+from scapy.arch.linux import VEthPair
+
 try:
     veth = VEthPair('this_IF_name_is_to_long_and_will_cause_an_error', 'veth_scapy_1')
     veth.setup()
@@ -186,7 +187,8 @@ try:
                             store=True,
                             count=2,
                             lfilter=lambda p: Ether in p and p[Ether].type == 0xbeef,
-                            started_callback=_sniffer_started)
+                            started_callback=_sniffer_started,
+                            timeout=3)
             global frm_count
             frm_count = 2
         t_sniffer = Thread(target=_sniffer, name="linux.uts sniff veth_scapy_1")
@@ -243,7 +245,8 @@ def _sniffer():
                     store=True,
                     count=2,
                     lfilter=lambda p: Ether in p and p[Ether].type == 0xbeef,
-                    started_callback=_sniffer_started)
+                    started_callback=_sniffer_started,
+                    timeout=3)
     global frm_count
     frm_count = 2
 
@@ -290,8 +293,11 @@ test_read_routes()
 = L3PacketSocket sendto exception
 ~ linux needs_root
 
+from scapy.arch.linux import L3PacketSocket
+import scapy.modules.six as six
+
 if six.PY3:
-    import mock, six, socket
+    import mock, socket
     @mock.patch("scapy.arch.linux.socket.socket.sendto")
     def test_L3PacketSocket_sendto_python3(mock_sendto):
         mock_sendto.side_effect = OSError(22, 2807)

@@ -11,6 +11,12 @@ then
   # Linux
   OSTOX="linux"
   UT_FLAGS+=" -K tshark"
+  if [ ! -z "$GITHUB_ACTIONS" ]
+  then
+    # Due to a security policy, the firewall of the Azure runner
+    # (Standard_DS2_v2) that runs Github Actions on Linux blocks ICMP.
+    UT_FLAGS+=" -K icmp_firewall"
+  fi
   if [ -z "$SIMPLE_TESTS" ]
   then
     # check vcan
@@ -68,6 +74,9 @@ then
       ;;
   esac
 fi
+
+# Configure OpenSSL
+export OPENSSL_CONF=$(python `dirname $BASH_SOURCE`/openssl.py)
 
 # Dump vars (the others were already dumped in install.sh)
 echo UT_FLAGS=$UT_FLAGS

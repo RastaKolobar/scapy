@@ -139,9 +139,10 @@ M = TypeVar('M')  # Machine storage
 @six.add_metaclass(Field_metaclass)
 class Field(Generic[I, M]):
     """
-    For more information on how this work, please refer to
-    http://www.secdev.org/projects/scapy/files/scapydoc.pdf
-    chapter ``Adding a New Field``
+    For more information on how this works, please refer to the
+    'Adding new protocols' chapter in the online documentation:
+
+    https://scapy.readthedocs.io/en/stable/build_dissect.html
     """
     __slots__ = [
         "name",
@@ -266,7 +267,11 @@ class Field(Generic[I, M]):
 
     def __repr__(self):
         # type: () -> str
-        return "<Field (%s).%s>" % (",".join(x.__name__ for x in self.owners), self.name)  # noqa: E501
+        return "<%s (%s).%s>" % (
+            self.__class__.__name__,
+            ",".join(x.__name__ for x in self.owners),
+            self.name
+        )
 
     def copy(self):
         # type: () -> Field[I, M]
@@ -353,6 +358,27 @@ class ConditionalField(_FieldContainer):
     def _evalcond(self, pkt):
         # type: (Packet) -> bool
         return bool(self.cond(pkt))
+
+    def any2i(self, pkt, x):
+        # type: (Optional[Packet], Any) -> Any
+        # BACKWARD COMPATIBILITY
+        # Note: we shouldn't need this function. (it's not correct)
+        # However, having i2h implemented (#2364), it changes the default
+        # behavior and broke all packets that wrongly use two ConditionalField
+        # with the same name. Those packets are the problem: they are wrongly
+        # built (they should either be re-using the same conditional field, or
+        # using a MultipleTypeField).
+        # But I don't want to dive into fixing all of them just yet,
+        # so for now, let's keep this this way, even though it's not correct.
+        if type(self.fld) is Field:
+            return x
+        return self.fld.any2i(pkt, x)
+
+    def i2h(self, pkt, val):
+        # type: (Optional[Packet], Any) -> Any
+        if pkt and not self._evalcond(pkt):
+            return None
+        return self.fld.i2h(pkt, val)
 
     def getfield(self, pkt, s):
         # type: (Packet, bytes) -> Tuple[bytes, Any]
@@ -1303,10 +1329,9 @@ class _StrField(Field[I, bytes]):
 
     def i2repr(self, pkt, x):
         # type: (Optional[Packet], I) -> str
-        val = super(_StrField, self).i2repr(pkt, x)
-        if val[:2] in ['b"', "b'"]:
-            return val[1:]
-        return val
+        if isinstance(x, bytes):
+            return repr(plain_str(x))
+        return super(_StrField, self).i2repr(pkt, x)
 
     def i2m(self, pkt, x):
         # type: (Optional[Packet], Optional[I]) -> bytes
@@ -1367,10 +1392,9 @@ class _PacketField(_StrField[K]):
                  name,  # type: str
                  default,  # type: Optional[K]
                  pkt_cls,  # type: Union[Callable[[bytes], Packet], Type[Packet]]  # noqa: E501
-                 remain=0,  # type: int
                  ):
         # type: (...) -> None
-        super(_PacketField, self).__init__(name, default, remain=remain)
+        super(_PacketField, self).__init__(name, default)
         self.cls = pkt_cls
 
     def i2m(self,

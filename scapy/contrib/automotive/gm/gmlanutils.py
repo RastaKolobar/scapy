@@ -64,8 +64,9 @@ class GMLAN_TesterPresentSender(PeriodicSenderThread):
     def run(self):
         # type: () -> None
         while not self._stopped.is_set():
-            self._socket.sr1(self._pkt, verbose=False, timeout=0.1)
-            time.sleep(self._interval)
+            for p in self._pkts:
+                self._socket.sr1(p, verbose=False, timeout=0.1)
+                time.sleep(self._interval)
 
 
 def GMLAN_InitDiagnostics(sock, broadcast_socket=None, timeout=None, verbose=None, retry=0):  # noqa: E501
@@ -159,6 +160,10 @@ def GMLAN_GetSecurityAccess(sock, key_function, level=1, timeout=None, verbose=N
             print("Requesting seed..")
         resp = sock.sr1(request, timeout=timeout, verbose=0)
         if not _check_response(resp, verbose):
+            if resp is not None and resp.returnCode == 0x37 and retry:
+                if verbose:
+                    print("RequiredTimeDelayNotExpired. Wait 10s.")
+                time.sleep(10)
             if verbose:
                 print("Negative Response.")
             continue

@@ -21,17 +21,17 @@ import time
 import traceback
 import heapq
 from threading import Thread, Event, Lock
-from typing import Iterable, Optional, Union, List, Tuple, Dict
+from scapy.compat import Iterator, Optional, Union, List, Tuple, Dict
 
 from scapy.packet import Packet
 from scapy.fields import BitField, FlagsField, StrLenField, \
     ThreeBytesField, XBitField, ConditionalField, \
     BitEnumField, ByteField, XByteField, BitFieldLenField, StrField
 from scapy.compat import chb, orb
-from scapy.layers.can import CAN
+from scapy.layers.can import CAN, CAN_MAX_IDENTIFIER, CAN_MTU, CAN_MAX_DLEN
 import scapy.modules.six as six
 import scapy.automaton as automaton
-import six.moves.queue as queue
+from scapy.modules.six.moves import queue
 from scapy.error import Scapy_Exception, warning, log_loading, log_runtime
 from scapy.supersocket import SuperSocket, SO_TIMESTAMPNS
 from scapy.config import conf
@@ -56,9 +56,6 @@ if six.PY3 and LINUX:
                          "{'use-can-isotp-kernel-module': True}' to enable "
                          "usage of can-isotp kernel module.")
 
-CAN_MAX_IDENTIFIER = (1 << 29) - 1  # Maximum 29-bit identifier
-CAN_MTU = 16
-CAN_MAX_DLEN = 8
 ISOTP_MAX_DLEN_2015 = (1 << 32) - 1  # Maximum for 32-bit FF_DL
 ISOTP_MAX_DLEN = (1 << 12) - 1  # Maximum for 12-bit FF_DL
 
@@ -200,10 +197,6 @@ class ISOTP(Packet):
                     "provided CAN frames, returning the first one.")
 
         return results[0]
-
-    def __eq__(self, other):
-        # Don't compare src, dst, exsrc and exdst.
-        return super(ISOTP, self).__eq__(other)
 
 
 class ISOTPHeader(CAN):
@@ -1961,7 +1954,7 @@ def filter_periodic_packets(packet_dict, verbose=False):
 
 
 def get_isotp_fc(id_value, id_list, noise_ids, extended, packet, verbose=False):   # noqa: E501
-    # type: (int, Union[List[int], Dict[int, Tuple[Packet, int]]], Optional[Iterable[int]], bool, Packet, bool) -> None   # noqa: E501
+    # type: (int, Union[List[int], Dict[int, Tuple[Packet, int]]], Optional[Iterator[int]], bool, Packet, bool) -> None   # noqa: E501
     """Callback for sniff function when packet received
 
     If received packet is a FlowControl and not in noise_ids append it
@@ -2004,8 +1997,8 @@ def get_isotp_fc(id_value, id_list, noise_ids, extended, packet, verbose=False):
 
 
 def scan(sock,                      # type: SuperSocket
-         scan_range=range(0x800),   # type: Iterable[int]
-         noise_ids=None,            # type: Optional[Iterable[int]]
+         scan_range=range(0x800),   # type: Iterator[int]
+         noise_ids=None,            # type: Optional[Iterator[int]]
          sniff_time=0.1,            # type: float
          extended_can_id=False,     # type: bool
          verbose=False              # type: bool
@@ -2052,10 +2045,10 @@ def scan(sock,                      # type: SuperSocket
 
 
 def scan_extended(sock,                              # type: SuperSocket
-                  scan_range=range(0x800),           # type: Iterable[int]
+                  scan_range=range(0x800),           # type: Iterator[int]
                   scan_block_size=32,                # type: int
-                  extended_scan_range=range(0x100),  # type: Iterable[int]
-                  noise_ids=None,                    # type: Optional[Iterable[int]]  # noqa: E501
+                  extended_scan_range=range(0x100),  # type: Iterator[int]
+                  noise_ids=None,                    # type: Optional[Iterator[int]]  # noqa: E501
                   sniff_time=0.1,                    # type: float
                   extended_can_id=False,             # type: bool
                   verbose=False                      # type: bool

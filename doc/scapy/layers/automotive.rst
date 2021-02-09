@@ -35,6 +35,9 @@ function to get all information about one specific protocol.
 |                     | OBD                  | OBD, OBD_S0X                                           |
 |                     +----------------------+--------------------------------------------------------+
 |                     | CCP                  | CCP, DTO, CRO                                          |
+|                     +----------------------+--------------------------------------------------------+
+|                     | XCP                  | XCPOnCAN, XCPOnUDP, XCPOnTCP, CTORequest, CTOResponse, |
+|                     |                      | DTO                                                    |
 +---------------------+----------------------+--------------------------------------------------------+
 | Transportation Layer| ISO-TP (ISO 15765-2) | ISOTPSocket, ISOTPNativeSocket, ISOTPSoftSocket        |
 |                     |                      |                                                        |
@@ -56,7 +59,7 @@ How-To
 
 Send and receive a message over Linux SocketCAN::
 
-   load_layer('can')
+   load_layer("can")
    load_contrib('cansocket')
 
    socket = CANSocket(channel='can0')
@@ -70,7 +73,7 @@ Send and receive a message over Linux SocketCAN::
 Send a message over a Vector CAN-Interface::
 
    import can
-   load_layer('can')
+   load_layer("can")
    conf.contribs['CANSocket'] = {'use-python-can' : True}
    load_contrib('cansocket')
    from can.interfaces.vector import VectorBus
@@ -211,30 +214,30 @@ Creating a simple native CANSocket::
    load_contrib('cansocket')
 
    # Simple Socket
-   socket = CANSocket(iface="vcan0")
+   socket = CANSocket(channel="vcan0")
 
 Creating a native CANSocket only listen for messages with Id == 0x200::
 
-   socket = CANSocket(iface="vcan0", can_filters=[{'can_id': 0x200, 'can_mask': 0x7FF}])
+   socket = CANSocket(channel="vcan0", can_filters=[{'can_id': 0x200, 'can_mask': 0x7FF}])
 
 Creating a native CANSocket only listen for messages with Id >= 0x200 and Id <= 0x2ff::
 
-   socket = CANSocket(iface="vcan0", can_filters=[{'can_id': 0x200, 'can_mask': 0x700}])
+   socket = CANSocket(channel="vcan0", can_filters=[{'can_id': 0x200, 'can_mask': 0x700}])
 
 Creating a native CANSocket only listen for messages with Id != 0x200::
 
-   socket = CANSocket(iface="vcan0", can_filters=[{'can_id': 0x200 | CAN_INV_FILTER, 'can_mask': 0x7FF}])
+   socket = CANSocket(channel="vcan0", can_filters=[{'can_id': 0x200 | CAN_INV_FILTER, 'can_mask': 0x7FF}])
 
 Creating a native CANSocket with multiple can_filters::
 
-   socket = CANSocket(iface='vcan0', can_filters=[{'can_id': 0x200, 'can_mask': 0x7ff},
+   socket = CANSocket(channel='vcan0', can_filters=[{'can_id': 0x200, 'can_mask': 0x7ff},
                                                   {'can_id': 0x400, 'can_mask': 0x7ff},
                                                   {'can_id': 0x600, 'can_mask': 0x7ff},
                                                   {'can_id': 0x7ff, 'can_mask': 0x7ff}])
 
 Creating a native CANSocket which also receives its own messages::
 
-   socket = CANSocket(iface="vcan0", receive_own_messages=True)
+   socket = CANSocket(channel="vcan0", receive_own_messages=True)
 
 .. image:: ../graphics/animations/animation-scapy-native-cansocket.svg
 
@@ -290,8 +293,8 @@ Import modules::
 
 Create can sockets for attack::
 
-   socket0 = CANSocket(iface='vcan0')
-   socket1 = CANSocket(iface='vcan1')
+   socket0 = CANSocket(channel='vcan0')
+   socket1 = CANSocket(channel='vcan1')
 
 Create a function to send packet with threading::
 
@@ -307,8 +310,8 @@ Create a function for forwarding or change packets::
 Create a function to bridge and sniff between two sockets::
 
    def bridge():
-       bSocket0 = CANSocket(iface='vcan0')
-       bSocket1 = CANSocket(iface='vcan1')
+       bSocket0 = CANSocket(channel='vcan0')
+       bSocket1 = CANSocket(channel='vcan1')
        bridge_and_sniff(if1=bSocket0, if2=bSocket1, xfrm12=forwarding, xfrm21=forwarding, timeout=1)
        bSocket0.close()
        bSocket1.close()
@@ -405,30 +408,31 @@ CAN Calibration Protocol (CCP)
 
 CCP is derived from CAN. The CAN-header is part of a CCP frame. CCP has two types
 of message objects. One is called Command Receive Object (CRO), the other is called
-Data Transmission Object (DTO). Usually CROs are sent to an ECU, and DTOs are received
-from an ECU. The information, if one DTO answers a CRO is implemented through a counter
+Data Transmission Object (DTO). Usually CROs are sent to an Ecu, and DTOs are received
+from an Ecu. The information, if one DTO answers a CRO is implemented through a counter
 field (ctr). If both objects have the same counter value, the payload of a DTO object
 can be interpreted from the command of the associated CRO object.
 
 Creating a CRO message::
 
+    load_contrib('automotive.ccp')
     CCP(identifier=0x700)/CRO(ctr=1)/CONNECT(station_address=0x02)
     CCP(identifier=0x711)/CRO(ctr=2)/GET_SEED(resource=2)
     CCP(identifier=0x711)/CRO(ctr=3)/UNLOCK(key=b"123456")
 
-If we aren't interested in the DTO of an ECU, we can just send a CRO message like this:
+If we aren't interested in the DTO of an Ecu, we can just send a CRO message like this:
 Sending a CRO message::
 
     pkt = CCP(identifier=0x700)/CRO(ctr=1)/CONNECT(station_address=0x02)
-    sock = CANSocket(iface=can.interface.Bus(bustype='socketcan', channel='vcan0', bitrate=250000))
+    sock = CANSocket(bustype='socketcan', channel='vcan0')
     sock.send(pkt)
 
-If we are interested in the DTO of an ECU, we need to set the basecls parameter of the
+If we are interested in the DTO of an Ecu, we need to set the basecls parameter of the
 CANSocket to CCP and we need to use sr1:
 Sending a CRO message::
 
     cro = CCP(identifier=0x700)/CRO(ctr=0x53)/PROGRAM_6(data=b"\x10\x11\x12\x10\x11\x12")
-    sock = CANSocket(iface=can.interface.Bus(bustype='socketcan', channel='vcan0', bitrate=250000), basecls=CCP)
+    sock = CANSocket(bustype='socketcan', channel='vcan0', basecls=CCP)
     dto = sock.sr1(cro)
     dto.show()
     ###[ CAN Calibration Protocol ]###
@@ -446,6 +450,64 @@ Sending a CRO message::
 
 Since sr1 calls the answers function, our payload of the DTO objects gets interpreted with the
 command of our CRO object.
+
+
+Universal calibration and measurement protocol (XCP)
+====================================================
+
+XCP is the successor of CCP. It is usable with several protocols. Scapy includes CAN, UDP and TCP.
+XCP has two types of message types: Command Transfer Object (CTO) and Data Transmission Object (DTO).
+CTOs send to an Ecu are requests (commands) and the Ecu has to reply with a positive response or an error.
+Additionally, the Ecu can send a CTO to inform the master about an asynchronous event (EV) or request a service execution (SERV).
+DTOs sent by the Ecu are called DAQ (Data AcQuisition) and include measured values.
+DTOs received by the Ecu are used for a periodic stimulation and are called STIM (Stimulation).
+
+
+Creating a CTO message::
+
+    CTORequest() / Connect()
+    CTORequest() / GetDaqResolutionInfo()
+    CTORequest() / GetSeed(mode=0x01, resource=0x00)
+
+To send the message over CAN a header has to be added
+
+    pkt = XCPOnCAN(identifier=0x700) / CTORequest() / Connect()
+    sock = CANSocket(iface=can.interface.Bus(bustype='socketcan', channel='vcan0'))
+    sock.send(pkt)
+
+If we are interested in the response of an Ecu, we need to set the basecls parameter of the
+CANSocket to XCPonCAN and we need to use sr1:
+Sending a CTO message::
+
+    sock = CANSocket(bustype='socketcan', channel='vcan0', basecls=XCPonCAN)
+    dto = sock.sr1(pkt)
+
+Since sr1 calls the answers function, our payload of the XCP-response objects gets interpreted with the
+command of our CTO object. Otherwise it could not be interpreted.
+The first message should always be the "CONNECT" message, the response of the Ecu determines how the messages are read. E.g.: byte order.
+Otherwise, one must set the address granularity, and max size of the DTOs and CTOs per hand in the contrib config::
+
+    conf.contribs['XCP']['Address_Granularity_Byte'] = 1  # Can be 1, 2 or 4
+    conf.contribs['XCP']['MAX_CTO'] = 8
+    conf.contribs['XCP']['MAX_DTO'] = 8
+
+If you do not want this to be set after receiving the message you can also disable that feature::
+
+    conf.contribs['XCP']['allow_byte_order_change'] = False
+    conf.contribs['XCP']['allow_ag_change'] = False
+    conf.contribs['XCP']['allow_cto_and_dto_change'] = False
+
+To send a pkt over TCP or UDP another header must be used.
+TCP::
+
+    prt1, prt2 = 12345, 54321
+    XCPOnTCP(sport=prt1, dport=prt2) / CTORequest() / Connect()
+
+UDP::
+
+    XCPOnUDP(sport=prt1, dport=prt2) / CTORequest() / Connect()
+
+
 
 ISOTP
 =====
@@ -471,7 +533,7 @@ The class ``ISOTPSocket`` can be set to a ``ISOTPNativeSocket`` or a ``ISOTPSoft
 The decision is made dependent on the configuration ``conf.contribs['ISOTP'] = {'use-can-isotp-kernel-module': True}`` (to select ``ISOTPNativeSocket``) or
 ``conf.contribs['ISOTP'] = {'use-can-isotp-kernel-module': False}`` (to select ``ISOTPSoftSocket``).
 This will allow you to write platform independent code. Apply this configuration before loading the ISOTP layer
-with ``load_contrib("isotp")``.
+with ``load_contrib('isotp')``.
 
 Another remark in respect to ISOTPSocket compatibility. Always use with for socket creation. Example::
 
@@ -630,7 +692,7 @@ Usage with python-can CANSockets::
    conf.contribs['ISOTP'] = {'use-can-isotp-kernel-module': False}
    conf.contribs['CANSocket'] = {'use-python-can': True}
    load_contrib('isotp')
-   with ISOTPSocket(CANSocket(iface=python_can.interface.Bus(bustype='socketcan', channel="can0", bitrate=250000)), sid=0x641, did=0x241) as sock:
+   with ISOTPSocket(CANSocket(bustype='socketcan', channel="can0"), sid=0x641, did=0x241) as sock:
        sock.send(...)
 
 This second example allows the usage of any ``python_can.interface`` object.
@@ -699,7 +761,7 @@ Interactive shell usage example::
     >>> conf.contribs['CANSocket'] = {'use-python-can': False}
     >>> load_contrib('cansocket')
     >>> load_contrib('isotp')
-    >>> socks = ISOTPScan(CANSocket("vcan0"), range(0x700, 0x7ff), can_interface="vcan0")
+    >>> socks = ISOTPScan(CANSocket("vcan0"), range(0x700, 0x800), can_interface="vcan0")
     >>> socks
     [<<ISOTPNativeSocket: read/write packets at a given CAN interface using CAN_ISOTP socket > at 0x7f98e27c8210>,
      <<ISOTPNativeSocket: read/write packets at a given CAN interface using CAN_ISOTP socket > at 0x7f98f9079cd0>,
@@ -708,12 +770,60 @@ Interactive shell usage example::
      <<ISOTPNativeSocket: read/write packets at a given CAN interface using CAN_ISOTP socket > at 0x7f98f912e950>,
      <<ISOTPNativeSocket: read/write packets at a given CAN interface using CAN_ISOTP socket > at 0x7f98f906c0d0>]
 
+XCPScanner
+---------------
+
+The XCPScanner is a utility to find the CAN identifiers of ECUs that support XCP.
+
+Commandline usage example::
+
+    python -m scapy.tools.automotive.xcpscanner -h
+    Finds XCP slaves using the "GetSlaveId"-message(Broadcast) or the "Connect"-message.
+
+    positional arguments:
+      channel               Linux SocketCAN interface name, e.g.: vcan0
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      --start START, -s START
+                            Start identifier CAN (in hex).
+                            The scan will test ids between --start and --end (inclusive)
+                            Default: 0x00
+      --end END, -e END     End identifier CAN (in hex).
+                            The scan will test ids between --start and --end (inclusive)
+                            Default: 0x7ff
+      --sniff_time', '-t'   Duration in milliseconds a sniff is waiting for a response.
+                            Default: 100
+      --broadcast, -b       Use Broadcast-message GetSlaveId instead of default "Connect"
+                            (GetSlaveId is an optional Message that is not always implemented)
+      --verbose VERBOSE, -v
+                            Display information during scan
+
+        Examples:
+            python3.6 -m scapy.tools.automotive.xcpscanner can0
+            python3.6 -m scapy.tools.automotive.xcpscanner can0 -b 500
+            python3.6 -m scapy.tools.automotive.xcpscanner can0 -s 50 -e 100
+            python3.6 -m scapy.tools.automotive.xcpscanner can0 -b 500 -v
+
+
+Interactive shell usage example::
+    >>> conf.contribs['CANSocket'] = {'use-python-can': False}
+    >>> load_layer("can")
+    >>> load_contrib("automotive.xcp.xcp")
+    >>> sock = CANSocket("vcan0")
+    >>> sock.basecls = XCPOnCAN
+    >>> scanner = XCPOnCANScanner(sock)
+    >>> result = scanner.start_scan()
+
+The result includes the slave_id (the identifier of the Ecu that receives XCP messages),
+and the response_id (the identifier that the Ecu will send XCP messages to).
+
 
 
 UDS
 ===
 
-The main usage of UDS is flashing and diagnostic of an ECU. UDS is an
+The main usage of UDS is flashing and diagnostic of an Ecu. UDS is an
 application layer protocol and can be used as a DoIP or HSFZ payload or a UDS packet
 can directly be sent over an ISOTPSocket. Every OEM has its own customization of UDS.
 This increases the difficulty of generic applications and OEM specific knowledge is
@@ -732,9 +842,9 @@ Customization of UDS_RDBI, UDS_WDBI
 -----------------------------------
 
 In real-world use-cases, the UDS layer is heavily customized. OEMs define their own substructure of packets.
-Especially the packets ReadDataByIdentifier or WriteDataByIdentifier have a very OEM or even ECU specific
+Especially the packets ReadDataByIdentifier or WriteDataByIdentifier have a very OEM or even Ecu specific
 substructure. Therefore a ``StrField`` ``dataRecord`` is not added to the ``field_desc``.
-The intended usage is to create ECU or OEM specific description files, which extend the general UDS layer of
+The intended usage is to create Ecu or OEM specific description files, which extend the general UDS layer of
 Scapy with further protocol implementations.
 
 Customization example::
@@ -770,8 +880,8 @@ Customization example::
 
 If one wants to work with this custom additions, these can be loaded at runtime to the Scapy interpreter::
 
-    >>> load_contrib("automotive.uds")
-    >>> load_contrib("automotive.OEM-XYZ.car-model-xyz")
+    >>> load_contrib('automotive.uds')
+    >>> load_contrib('automotive.OEM-XYZ.car-model-xyz')
 
     >>> pkt = UDS()/UDS_WDBI()/DBI_IP(IP='192.168.2.1', SUBNETMASK='255.255.255.0', DEFAULT_GATEWAY='192.168.2.1')
 
@@ -803,47 +913,47 @@ Usage example:
 .. image:: ../graphics/animations/animation-scapy-gmlan.svg
 
 
-ECU Utility examples
+Ecu Utility examples
 ====================
 
-The ECU utility can be used to analyze the internal states of an ECU under investigation.
+The Ecu utility can be used to analyze the internal states of an Ecu under investigation.
 This utility depends heavily on the support of the used protocol. ``UDS`` is supported.
 
-Log all commands applied to an ECU
+Log all commands applied to an Ecu
 ----------------------------------
 
-This example shows the logging mechanism of an ECU object. The log of an ECU is a dictionary of applied UDS commands. The key for this dictionary is the UDS service name. The value consists of a list of tuples, containing a timestamp and a log value
+This example shows the logging mechanism of an Ecu object. The log of an Ecu is a dictionary of applied UDS commands. The key for this dictionary is the UDS service name. The value consists of a list of tuples, containing a timestamp and a log value
 
 Usage example::
 
-    ecu = ECU(verbose=False, store_supported_responses=False)
+    ecu = Ecu(verbose=False, store_supported_responses=False)
     ecu.update(PacketList(msgs))
     print(ecu.log)
     timestamp, value = ecu.log["DiagnosticSessionControl"][0]
 
 
 
-Trace all commands applied to an ECU
+Trace all commands applied to an Ecu
 ------------------------------------
 
-This example shows the trace mechanism of an ECU object. Traces of the current state of the ECU object and the received message are printed on stdout. Some messages, depending on the protocol, will change the internal state of the ECU.
+This example shows the trace mechanism of an Ecu object. Traces of the current state of the Ecu object and the received message are printed on stdout. Some messages, depending on the protocol, will change the internal state of the Ecu.
 
 Usage example::
 
-    ecu = ECU(verbose=True, logging=False, store_supported_responses=False)
+    ecu = Ecu(verbose=True, logging=False, store_supported_responses=False)
     ecu.update(PacketList(msgs))
     print(ecu.current_session)
 
 
 
-Generate supported responses of an ECU
+Generate supported responses of an Ecu
 --------------------------------------
 
-This example shows a mechanism to clone a real world ECU by analyzing a list of Packets.
+This example shows a mechanism to clone a real world Ecu by analyzing a list of Packets.
 
 Usage example::
 
-    ecu = ECU(verbose=False, logging=False, store_supported_responses=True)
+    ecu = Ecu(verbose=False, logging=False, store_supported_responses=True)
     ecu.update(PacketList(msgs))
     supported_responses = ecu.supported_responses
     unanswered_packets = ecu.unanswered_packets
@@ -863,7 +973,7 @@ Usage example::
         udsmsgs = sniff(session=ISOTPSession, session_kwargs={"use_ext_addr":False, "basecls":UDS}, count=50, opened_socket=sock)
 
 
-    ecu = ECU()
+    ecu = Ecu()
     ecu.update(udsmsgs)
     print(ecu.log)
     print(ecu.supported_responses)
@@ -871,14 +981,14 @@ Usage example::
 
 
 
-Analyze on the fly with ECUSession
+Analyze on the fly with EcuSession
 ----------------------------------
 
-This example shows the usage of an ECUSession in sniff. An ISOTPSocket or any socket like object which returns entire messages of the right protocol can be used. An ``ECUSession`` is used as supersession in an ``ISOTPSession``. To obtain the ``ECU`` object from an ``ECUSession``, the ``ECUSession`` has to be created outside of sniff.
+This example shows the usage of an EcuSession in sniff. An ISOTPSocket or any socket like object which returns entire messages of the right protocol can be used. An ``EcuSession`` is used as supersession in an ``ISOTPSession``. To obtain the ``Ecu`` object from an ``EcuSession``, the ``EcuSession`` has to be created outside of sniff.
 
 Usage example::
 
-    session = ECUSession()
+    session = EcuSession()
 
     with PcapReader("test/contrib/automotive/ecu_trace.pcap") as sock:
         udsmsgs = sniff(session=ISOTPSession, session_kwargs={"supersession": session, "use_ext_addr":False, "basecls":UDS}, count=50, opened_socket=sock)
@@ -900,7 +1010,7 @@ This example shows a SOME/IP message which requests a service 0x1234 with the me
 
 Load the contribution::
 
-   load_contrib("automotive.someip")
+   load_contrib('automotive.someip')
 
 Create UDP package::
 
@@ -937,7 +1047,7 @@ In this example a SOME/IP SD offer service message is shown with an IPv4 endpoin
 
 Load the contribution::
 
-   load_contrib("automotive.someip")
+   load_contrib('automotive.someip')
 
 Create UDP package::
 
@@ -988,7 +1098,7 @@ OBD
 OBD message
 -----------
 
-OBD is implemented on top of ISOTP. Use an ISOTPSocket for the communication with an ECU. 
+OBD is implemented on top of ISOTP. Use an ISOTPSocket for the communication with an Ecu.
 You should set the parameters ``basecls=OBD`` and ``padding=True`` in your ISOTPSocket init call.
 
 OBD is split into different service groups. Here are some example requests:
@@ -1010,7 +1120,7 @@ The response will contain a PacketListField, called `data_records`. This field c
          |###[ PID_00_PIDsSupported ]###
          |     supported_pids= PID20+PID1F+PID1C+PID15+PID14+PID13+PID11+PID10+PID0F+PID0E+PID0D+PID0C+PID0B+PID0A+PID07+PID06+PID05+PID04+PID03+PID01
 
-Let's assume our ECU under test supports the pid 0x15::
+Let's assume our Ecu under test supports the pid 0x15::
    
    req = OBD()/OBD_S01(pid=[0x15])
    resp = sock.sr1(req)
